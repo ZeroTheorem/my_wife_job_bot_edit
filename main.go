@@ -54,11 +54,13 @@ func main() {
 	btnGetSalary := menu.Data("🤑 Узнать ЗП", "salary")
 	btnGetTotalMonth := menu.Data("💰 Узнать выручку за месяц", "totalMonth")
 	btnGetAllRow := menu.Data("👀 Увидеть все записи за месяц", "allRow")
+	btnSetTarget := menu.Data("🎯 Установить палан на месяц", "target")
 	menu.Inline(
 		menu.Row(btnAdd),
 		menu.Row(btnGetSalary),
 		menu.Row(btnGetAvatage),
 		menu.Row(btnGetTotalMonth),
+		menu.Row(btnSetTarget),
 		menu.Row(btnGetAllRow),
 		menu.Row(btnDelete),
 	)
@@ -66,6 +68,8 @@ func main() {
 
 	// -- Section: define states
 	var stateAdd bool
+	var stateSetTarget bool
+	var target int64
 	// -- end section
 
 	// -- Section: define hanlers
@@ -152,8 +156,13 @@ func main() {
 		return c.Edit(msg.String(), menu)
 	})
 
+	b.Handle(&btnSetTarget, func(c tele.Context) error {
+		stateSetTarget = true
+		return c.Send("Введите значение")
+	})
 	b.Handle(tele.OnText, func(c tele.Context) error {
-		if stateAdd {
+		switch {
+		case stateAdd:
 			vals := strings.Split(c.Message().Text, " ")
 			if len(vals) != 2 {
 				return c.Send("Необходимо ввести все значение в формате имя|начение")
@@ -181,6 +190,15 @@ func main() {
 			}
 			stateAdd = false
 			return c.Send("Запись была успешно добавлена 😉", menu)
+		case stateSetTarget:
+			msg := c.Message().Text
+			i, err := strconv.ParseInt(msg, 10, 64)
+			if err != nil {
+				c.Send("Пожалуйста введите число!")
+			}
+			target = i
+			stateSetTarget = false
+			return c.Send(fmt.Sprintf("План %v был успешно установлен! 😉", target), menu)
 		}
 		return nil
 	})
