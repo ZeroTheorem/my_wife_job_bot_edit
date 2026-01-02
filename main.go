@@ -171,6 +171,17 @@ func main() {
 			return c.Send(
 				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
+		if result.Count == 0 {
+			result, err = q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
+				Name:  "алена",
+				Month: int64(now.Month()) - 1,
+				Year:  int64(now.Year()) - 1,
+			})
+			if err != nil {
+				return c.Send(
+					p.Sprintf("Ууупс... что-то пошло не так: %v", err))
+			}
+		}
 		return c.Edit(
 			p.Sprintf("Твоя ЗП за предыдущий месяц: <b>%v₽</b>\nА было бы: <b>%v₽</b>",
 				result.Count*1500+(int64(result.Sum.Float64*0.04)),
