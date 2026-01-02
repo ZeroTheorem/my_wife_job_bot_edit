@@ -67,7 +67,13 @@ func main() {
 		menu.Row(btnDelete),
 	)
 	// -- end section
-
+	subMenu := &tele.ReplyMarkup{}
+	btnGetSalaryPrevMonth := menu.Data("🤑 Предыдущий месяц", "prevSalary")
+	btnBackToMainMenu := menu.Data("⬅️ Назад", "back")
+	subMenu.Inline(
+		menu.Row(btnGetSalaryPrevMonth),
+		menu.Row(btnBackToMainMenu),
+	)
 	// -- Section: define states
 	var (
 		stateAdd       bool
@@ -147,9 +153,30 @@ func main() {
 			p.Sprintf("Твоя ЗП на текущий момент: <b>%v₽</b>\nА было бы: <b>%v₽</b>",
 				result.Count*1500+(int64(result.Sum.Float64*0.04)),
 				result.Count*3000,
-			), menu)
+			), subMenu)
 	})
 
+	b.Handle(&btnBackToMainMenu, func(c tele.Context) error {
+		return c.Edit("Привет, я предоставлю тебе все цифры которые тебе нужны!", menu)
+	})
+
+	b.Handle(&btnGetSalaryPrevMonth, func(c tele.Context) error {
+		now := time.Now()
+		result, err := q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
+			Name:  "алена",
+			Month: int64(now.Month()) - 1,
+			Year:  int64(now.Year()),
+		})
+		if err != nil {
+			return c.Send(
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
+		}
+		return c.Edit(
+			p.Sprintf("Твоя ЗП за предыдущий месяц: <b>%v₽</b>\nА было бы: <b>%v₽</b>",
+				result.Count*1500+(int64(result.Sum.Float64*0.04)),
+				result.Count*3000,
+			), subMenu)
+	})
 	b.Handle(&btnGetTotalMonth, func(c tele.Context) error {
 		now := time.Now()
 		r, err := q.GetMonthlyTotal(ctx, db.GetMonthlyTotalParams{
