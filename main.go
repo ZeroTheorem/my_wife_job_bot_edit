@@ -162,20 +162,23 @@ func main() {
 
 	b.Handle(&btnGetSalaryPrevMonth, func(c tele.Context) error {
 		now := time.Now()
-		result, err := q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
-			Name:  "алена",
-			Month: int64(now.Month()) - 1,
-			Year:  int64(now.Year()),
-		})
-		if err != nil {
-			return c.Send(
-				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
-		}
-		if result.Count == 0 {
+		var result db.GetWifeSalaryRow
+		switch int64(now.Month()) {
+		case 1:
 			result, err = q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
 				Name:  "алена",
 				Month: 12,
 				Year:  int64(now.Year()) - 1,
+			})
+			if err != nil {
+				return c.Send(
+					p.Sprintf("Ууупс... что-то пошло не так: %v", err))
+			}
+		default:
+			result, err = q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
+				Name:  "алена",
+				Month: int64(now.Month()) - 1,
+				Year:  int64(now.Year()),
 			})
 			if err != nil {
 				return c.Send(
