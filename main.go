@@ -12,6 +12,8 @@ import (
 
 	"github.com/ZeroTheorem/my_wife_job_bot/db"
 	"github.com/joho/godotenv"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 	tele "gopkg.in/telebot.v4"
 	_ "modernc.org/sqlite"
 )
@@ -38,10 +40,10 @@ func main() {
 
 	// -- Section: open db connection and setub query executor
 	conn, err := sql.Open("sqlite", "file:mydb.db")
-
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer conn.Close()
 	ctx := context.Background()
 	q := db.New(conn)
 	// -- end section
@@ -67,9 +69,19 @@ func main() {
 	// -- end section
 
 	// -- Section: define states
-	var stateAdd bool
-	var stateSetTarget bool
-	var target int64
+	var (
+		stateAdd       bool
+		stateSetTarget bool
+	)
+	// -- end section
+	// -- Section: define global variables
+	var (
+		target float64
+	)
+	// -- end section
+
+	// -- Section: initialize formater
+	p := message.NewPrinter(language.Russian)
 	// -- end section
 
 	// -- Section: define hanlers
@@ -84,74 +96,102 @@ func main() {
 		lastVal, err := q.DeleteLastRow(ctx)
 		if err != nil {
 			return c.Send(
-				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
-		return c.Edit(fmt.Sprintf("Запись:\n\n%v: <b>%v</b>\n\nбыла успешно удалена 😉", lastVal.Name, lastVal.Val), menu)
+		return c.Edit(p.Sprintf(
+			"Запись:\n\n%v: <b>%v</b>\n\nбыла успешно удалена 😉",
+			lastVal.Name,
+			lastVal.Val), menu)
 
 	})
 
 	b.Handle(&btnGetAvatage, func(c tele.Context) error {
+		now := time.Now()
 		avgDasha, err := q.GetAvg(ctx, db.GetAvgParams{
 			Name:  "даша",
-			Month: int64(time.Now().Month()),
-			Year:  int64(time.Now().Year()),
+			Month: int64(now.Month()),
+			Year:  int64(now.Year()),
 		})
 		if err != nil {
 			return c.Send(
-				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
 		avgAlena, err := q.GetAvg(ctx, db.GetAvgParams{
 			Name:  "алена",
-			Month: int64(time.Now().Month()),
-			Year:  int64(time.Now().Year()),
+			Month: int64(now.Month()),
+			Year:  int64(now.Year()),
 		})
 		if err != nil {
 			return c.Send(
-				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
-		return c.Edit(fmt.Sprintf("Твое среднее: <b>%.1f</b>\nСреднее какой-то Дашки: <b>%.1f</b>\n\nПо итогу: <b>%.1f</b>", avgAlena.Float64, avgDasha.Float64, avgAlena.Float64-avgDasha.Float64), menu)
+		return c.Edit(p.Sprintf(
+			"Твое среднее: <b>%.0f₽</b>\nСреднее какой-то Дашки: <b>%.0f₽</b>\n\nПо итогу: <b>%.0f₽</b>",
+			avgAlena.Float64,
+			avgDasha.Float64,
+			avgAlena.Float64-avgDasha.Float64), menu)
 	})
 
 	b.Handle(&btnGetSalary, func(c tele.Context) error {
+		now := time.Now()
 		result, err := q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
 			Name:  "алена",
-			Month: int64(time.Now().Month()),
-			Year:  int64(time.Now().Year()),
+			Month: int64(now.Month()),
+			Year:  int64(now.Year()),
 		})
 		if err != nil {
 			return c.Send(
-				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
 		return c.Edit(
-			fmt.Sprintf("Твоя ЗП на текущий момент: <b>%v</b>\nА было бы: <b>%v</b>",
+			p.Sprintf("Твоя ЗП на текущий момент: <b>%v₽</b>\nА было бы: <b>%v₽</b>",
 				result.Count*1500+(int64(result.Sum.Float64*0.04)),
 				result.Count*3000,
 			), menu)
 	})
 
 	b.Handle(&btnGetTotalMonth, func(c tele.Context) error {
+		now := time.Now()
 		r, err := q.GetMonthlyTotal(ctx, db.GetMonthlyTotalParams{
-			Month: int64(time.Now().Month()),
-			Year:  int64(time.Now().Year()),
+			Month: int64(now.Month()),
+			Year:  int64(now.Year()),
 		})
 		if err != nil {
 			return c.Send(
 				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
-		return c.Edit(fmt.Sprintf("Всего в этом месяце: <b>%.1f</b>", r.Float64), menu)
+		switch target {
+		case 0:
+			return c.Edit(
+				p.Sprintf(
+					"Всего в этом месяце: <b>%.0f₽</b>\n\nНажми '🎯 Установить план на месяц' для более подробной статистики",
+					r.Float64), menu)
+		default:
+			percent := getPercent(int64(r.Float64), int64(target))
+			lack := max(target-r.Float64, 0)
+			return c.Edit(p.Sprintf(
+				"План на месяц: <b>%.0f₽</b>\nНе хватает еще: <b>%.0f₽</b>\n\n<b>%.0f₽ / %.0f₽</b>\n%v %.1f%%",
+				target,
+				lack,
+				r.Float64,
+				target,
+				generateProgressBar(int(percent)),
+				percent), menu)
+		}
 	})
 	b.Handle(&btnGetAllRow, func(c tele.Context) error {
+		now := time.Now()
 		r, err := q.GetAllRowsInMonth(ctx, db.GetAllRowsInMonthParams{
-			Month: int64(time.Now().Month()),
-			Year:  int64(time.Now().Year()),
+			Month: int64(now.Month()),
+			Year:  int64(now.Year()),
 		})
 		if err != nil {
 			return c.Send(
-				fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+				p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 		}
 		var msg strings.Builder
 		for _, v := range r {
-			fmt.Fprintf(&msg, "%v.%v -- %v: <b>%v</b>\n", v.Month, v.Year, v.Name, v.Val)
+			fmt.Fprintf(&msg, "%v.%v -- %v: <b>%v₽</b>\n", v.Month, v.Year, v.Name, p.Sprint(v.Val))
 		}
 		return c.Edit(msg.String(), menu)
 	})
@@ -175,30 +215,31 @@ func main() {
 			intValue, err := strconv.ParseInt(vals[1], 10, 64)
 			if err != nil {
 				return c.Send(
-					fmt.Sprintf("%v -- второе значение после /add должно быть числом", vals[1]))
+					p.Sprintf("%v -- второе значение после /add должно быть числом", vals[1]))
 			}
+			now := time.Now()
 			err = q.CreateRow(ctx, db.CreateRowParams{
 				Name:  nameLower,
 				Val:   intValue,
-				Month: int64(time.Now().Month()),
-				Year:  int64(time.Now().Year()),
+				Month: int64(now.Month()),
+				Year:  int64(now.Year()),
 			})
 			if err != nil {
 				return c.Send(
-					fmt.Sprintf("Ууупс... что-то пошло не так: %v", err))
+					p.Sprintf("Ууупс... что-то пошло не так: %v", err))
 
 			}
 			stateAdd = false
 			return c.Send("Запись была успешно добавлена 😉", menu)
 		case stateSetTarget:
 			msg := c.Message().Text
-			i, err := strconv.ParseInt(msg, 10, 64)
+			i, err := strconv.ParseFloat(msg, 64)
 			if err != nil {
-				c.Send("Пожалуйста введите число!")
+				return c.Send("Пожалуйста введите число!")
 			}
 			target = i
 			stateSetTarget = false
-			return c.Send(fmt.Sprintf("План %v был успешно установлен! 😉", target), menu)
+			return c.Send(p.Sprintf("План <b>%.0f₽</b> был успешно установлен! 😉", target), menu)
 		}
 		return nil
 	})
@@ -209,3 +250,16 @@ func main() {
 	// -- end section
 
 }
+
+// -- Section: help functions
+func generateProgressBar(percent int) string {
+	completed := min(percent*20/100, 20)
+	bar := strings.Repeat("█", completed) + strings.Repeat("░", 20-completed)
+	return bar
+}
+
+func getPercent(num1, num2 int64) float64 {
+	return (float64(num1) / float64(num2)) * 100
+}
+
+// -- end section
