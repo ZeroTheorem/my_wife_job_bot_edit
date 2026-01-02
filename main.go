@@ -174,7 +174,7 @@ func main() {
 		if result.Count == 0 {
 			result, err = q.GetWifeSalary(ctx, db.GetWifeSalaryParams{
 				Name:  "алена",
-				Month: int64(now.Month()) - 1,
+				Month: 12,
 				Year:  int64(now.Year()) - 1,
 			})
 			if err != nil {
